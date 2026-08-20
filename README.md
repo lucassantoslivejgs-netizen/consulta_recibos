@@ -1,4 +1,4 @@
-# Consulta de Recibos — LIVE Roupas Esportivas
+# Consulta de Recibos — LIVE
 
 Sistema para qualquer colaborador confirmar recibos de pagamento de clientes
 sem precisar acionar o Setor Financeiro. Um sincronizador lê as planilhas
