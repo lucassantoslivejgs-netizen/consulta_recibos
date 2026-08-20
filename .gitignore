@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+backend/logs/*.log
+db/recibos.db
+db/recibos.db-journal
+db/FLUXO DE CAIXA LIVE ROUPAS 2026/
+*.xlsx
+node_modules/
+frontend/dist/
+.env
+*.local
