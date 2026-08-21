@@ -18,6 +18,7 @@ function App() {
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [meta, setMeta] = useState<Meta | null>(null)
+  const [gatilhoRecarga, setGatilhoRecarga] = useState(0)
 
   function aoAlterarFiltros(novosValores: ValoresFiltro) {
     setFiltros(novosValores)
@@ -27,6 +28,14 @@ function App() {
   function aoLimparFiltros() {
     setFiltros(FILTROS_VAZIOS)
     setPagina(1)
+  }
+
+  function aoSincronizarConcluido() {
+    buscarMeta()
+      .then(setMeta)
+      .catch(() => setMeta(null))
+    // reexecuta a busca atual (se houver) pra refletir os dados recém-sincronizados
+    setGatilhoRecarga((n) => n + 1)
   }
 
   useEffect(() => {
@@ -69,7 +78,7 @@ function App() {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [filtros, pagina])
+  }, [filtros, pagina, gatilhoRecarga])
 
   const temFiltro = filtros.cliente || filtros.data || filtros.valorExibido
 
@@ -108,7 +117,10 @@ function App() {
         </div>
       </main>
 
-      <Footer ultimaSincronizacao={meta?.ultima_sincronizacao} />
+      <Footer
+        ultimaSincronizacao={meta?.ultima_sincronizacao}
+        aoSincronizarConcluido={aoSincronizarConcluido}
+      />
     </div>
   )
 }

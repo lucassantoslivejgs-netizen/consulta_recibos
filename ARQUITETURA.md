@@ -114,18 +114,56 @@ histórico do `main.py`/`db.py` se precisar trazer de volta).
 
 ## API (`backend/app/main.py`)
 
-Três rotas, sem autenticação (uso interno, rede local):
+Cinco rotas, sem autenticação (uso interno, rede local):
 
 | Rota | Método | Descrição |
 |---|---|---|
 | `/api/recibos` | GET | Busca paginada. Query params: `cliente` (LIKE sobre `cliente_normalizado`, sem acento/case), `data` (igualdade exata, `YYYY-MM-DD`), `valor` (string decimal, convertida para centavos e comparada por igualdade — não é faixa), `pagina`, `tamanho_pagina`. Sem nenhum filtro preenchido, retorna resultado vazio (`sem_filtro: true`) em vez de escanear a tabela toda. |
 | `/api/meta` | GET | Metadados da última sincronização (`meta` table): timestamp, contagens, duração. Usado só para exibir "última atualização" no rodapé. |
 | `/api/recibos/observacao` | PUT | Body `{chave, texto}` → upsert/delete em `anotacoes`. Retorna `{chave, observacao}` com o texto já `strip()`ado. |
+| `/api/sync` | POST | Dispara `sync.executar()` em background (ver seção abaixo). `409` se já houver uma sincronização em andamento. |
+| `/api/sync/status` | GET | `{em_andamento, iniciado_em, concluido_em, erro}` — usado pelo front pra fazer polling até a sincronização terminar. |
 
 Em produção, `main.py` também monta `frontend/dist` como estático na raiz
 (`StaticFiles(..., html=True)`), então o mesmo processo uvicorn serve API e
 tela na mesma porta. Em dev, o front roda separado via Vite (porta 5173) e
 `vite.config.ts` faz proxy de `/api/*` para `127.0.0.1:8000`.
+
+## Sincronização manual pela tela (`/api/sync`)
+
+Botão "Atualizar dados" no rodapé, pra não depender só do Agendador de
+Tarefas rodando 1x/dia — chama o mesmo `sync.executar()` que o `run_sync.py`
+usa, só que disparado por HTTP.
+
+Pontos que não são óbvios:
+
+- **Roda em background, não bloqueia a requisição.** Uma sincronização leva
+  ~90-120s (8 planilhas, ~22k linhas cada). `POST /api/sync` usa
+  `BackgroundTasks` do FastAPI/Starlette — a função roda numa threadpool
+  (não bloqueia o event loop), então outras requisições (busca, `/api/meta`)
+  continuam sendo atendidas normalmente enquanto a sincronização roda.
+- **Lock em memória (`threading.Lock`) impede duas sincronizações
+  simultâneas.** `db.gravar_carga_atomica` não foi desenhada pra
+  concorrência — duas execuções ao mesmo tempo escreveriam na mesma
+  `recibos_tmp`. `_sync_lock.acquire(blocking=False)` no início de
+  `disparar_sincronizacao` garante só uma por vez; uma segunda tentativa
+  recebe `409`. O lock é liberado em `_executar_sync_em_background`
+  (bloco `finally`), então mesmo se `sync.executar()` lançar exceção o
+  lock não fica preso.
+  **Limitação conhecida**: esse lock é por processo. Se um dia o uvicorn
+  rodar com `--workers > 1` (múltiplos processos), cada worker teria seu
+  próprio lock e a proteção furaria — hoje a app roda com um único worker,
+  então não é um problema real, só um limite a lembrar se isso mudar.
+- **Front faz polling em `/api/sync/status`** (`Footer.tsx`, a cada 2s)
+  até `em_andamento` virar `false`. Ao montar, o `Footer` já consulta o
+  status uma vez — se outra pessoa (ou o Agendador) já tiver disparado uma
+  sincronização, o botão aparece "Sincronizando…" pra todo mundo que abrir a
+  tela nesse meio-tempo, não só pra quem clicou.
+- Quando a sincronização termina sem erro, o front chama `buscarMeta()` de
+  novo (atualiza o rodapé) e reexecuta a busca atual via um contador
+  (`gatilhoRecarga` em `App.tsx`) incluído nas dependências do `useEffect`
+  de busca — assim os resultados na tela já refletem os dados novos sem
+  precisar recarregar a página.
 
 ## Frontend
 

@@ -65,3 +65,28 @@ export async function salvarObservacao(chave: string, texto: string): Promise<vo
     throw new Error(`Falha ao salvar observação (HTTP ${resp.status})`)
   }
 }
+
+export interface StatusSincronizacao {
+  em_andamento: boolean
+  iniciado_em: string | null
+  concluido_em: string | null
+  erro: string | null
+}
+
+/** Retorna false sem lançar erro se já houver uma sincronização em andamento (HTTP 409). */
+export async function dispararSincronizacao(): Promise<boolean> {
+  const resp = await fetch('/api/sync', { method: 'POST' })
+  if (resp.status === 409) return false
+  if (!resp.ok) {
+    throw new Error(`Falha ao iniciar sincronização (HTTP ${resp.status})`)
+  }
+  return true
+}
+
+export async function consultarStatusSincronizacao(): Promise<StatusSincronizacao> {
+  const resp = await fetch('/api/sync/status')
+  if (!resp.ok) {
+    throw new Error(`Falha ao consultar status da sincronização (HTTP ${resp.status})`)
+  }
+  return resp.json()
+}

@@ -61,15 +61,25 @@ Explorer), para evitar download sob demanda durante a sincronização.
 
 ## Rodando a sincronização
 
-```powershell
-python run_sync.py
-```
+Duas formas, com o mesmo resultado:
 
-Grava um log em `backend/logs/sync_AAAAMMDD_HHMMSS.log` com: arquivos
-encontrados/ignorados, linhas lidas e após cada filtro por arquivo, bancos
-distintos encontrados (para conferir que nenhum recibo válido está sendo
-perdido por grafia divergente do banco) e erros. A carga é atômica: se a
-sincronização falhar, o banco anterior permanece intacto.
+- **Pela linha de comando** (usado pela tarefa agendada):
+  ```powershell
+  python run_sync.py
+  ```
+- **Pela própria tela**, no botão "Atualizar dados" no rodapé — útil para
+  quando alguém atualiza uma planilha e não quer esperar a próxima
+  sincronização agendada. Leva o mesmo tempo (~1-2 minutos); a tela mostra
+  "Sincronizando…" e atualiza os resultados sozinha ao terminar. Só permite
+  uma sincronização por vez (uma segunda tentativa enquanto já tem uma
+  rodando é rejeitada, para não haver duas gravações concorrentes no banco).
+
+Cada execução grava um log em `backend/logs/` (`sync_AAAAMMDD_HHMMSS.log`
+via linha de comando, `web_AAAAMMDD_HHMMSS.log` durante a vida do servidor
+web) com: arquivos encontrados/ignorados, linhas lidas e após cada filtro
+por arquivo, bancos distintos encontrados (para conferir que nenhum recibo
+válido está sendo perdido por grafia divergente do banco) e erros. A carga
+é atômica: se a sincronização falhar, o banco anterior permanece intacto.
 
 ## Agendamento (Windows)
 
