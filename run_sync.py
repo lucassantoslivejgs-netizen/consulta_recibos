@@ -1,8 +1,10 @@
-"""Entrypoint de linha de comando para a sincronização diária.
+"""Entrypoint de linha de comando para a sincronização.
 
 Uso: python run_sync.py
-Pensado para ser chamado pelo Agendador de Tarefas do Windows
-(ver scripts/agendar_tarefa.ps1). Código de saída != 0 em caso de falha.
+Roda o mesmo pipeline que o botão "Atualizar dados" da tela (`sync.executar()`),
+mas por linha de comando — útil pra rodar sem o servidor web ligado, ou pra
+configurar automação própria (ex.: Agendador de Tarefas do Windows) caso
+algum dia isso volte a fazer sentido. Código de saída != 0 em caso de falha.
 """
 from __future__ import annotations
 

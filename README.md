@@ -61,18 +61,20 @@ Explorer), para evitar download sob demanda durante a sincronização.
 
 ## Rodando a sincronização
 
-Duas formas, com o mesmo resultado:
+Não há sincronização automática agendada hoje — a atualização é sob demanda,
+de duas formas equivalentes:
 
-- **Pela linha de comando** (usado pela tarefa agendada):
-  ```powershell
-  python run_sync.py
-  ```
-- **Pela própria tela**, no botão "Atualizar dados" no rodapé — útil para
-  quando alguém atualiza uma planilha e não quer esperar a próxima
-  sincronização agendada. Leva o mesmo tempo (~1-2 minutos); a tela mostra
+- **Pela própria tela**, no botão "Atualizar dados" no rodapé — a forma
+  esperada de uso no dia a dia. Leva ~1-2 minutos; a tela mostra
   "Sincronizando…" e atualiza os resultados sozinha ao terminar. Só permite
   uma sincronização por vez (uma segunda tentativa enquanto já tem uma
   rodando é rejeitada, para não haver duas gravações concorrentes no banco).
+- **Pela linha de comando**, útil pra rodar sem precisar do servidor web
+  ligado, ou se um dia fizer sentido automatizar de novo (ex.: reativar um
+  agendamento no servidor de produção):
+  ```powershell
+  python run_sync.py
+  ```
 
 Cada execução grava um log em `backend/logs/` (`sync_AAAAMMDD_HHMMSS.log`
 via linha de comando, `web_AAAAMMDD_HHMMSS.log` durante a vida do servidor
@@ -80,23 +82,6 @@ web) com: arquivos encontrados/ignorados, linhas lidas e após cada filtro
 por arquivo, bancos distintos encontrados (para conferir que nenhum recibo
 válido está sendo perdido por grafia divergente do banco) e erros. A carga
 é atômica: se a sincronização falhar, o banco anterior permanece intacto.
-
-## Agendamento (Windows)
-
-Depois de validar que `python run_sync.py` funciona na máquina de produção,
-registre a tarefa diária (PowerShell como Administrador):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\agendar_tarefa.ps1
-```
-
-Isso cria a tarefa `ConsultaRecibos-Sincronizacao`, agendada para rodar todo
-dia às 07:00, com "executar assim que possível" habilitado (caso a máquina
-esteja desligada no horário). Para testar imediatamente:
-
-```powershell
-Start-ScheduledTask -TaskName 'ConsultaRecibos-Sincronizacao'
-```
 
 ## Rodando a aplicação web
 
@@ -129,7 +114,7 @@ redirecionar chamadas `/api/*` para `localhost:8000`.
 ```
 config.ini              configuração (pasta de origem, códigos de conta, banco)
 requirements.txt        dependências Python
-run_sync.py             entrypoint da sincronização (usado pelo Agendador de Tarefas)
+run_sync.py             entrypoint de linha de comando da sincronização
 db/
   FLUXO DE CAIXA .../   planilhas de origem (somente leitura)
   recibos.db            banco gerado pela sincronização
@@ -139,8 +124,6 @@ backend/app/
   sync.py               leitura das planilhas, filtros de negócio
   main.py               API FastAPI + serve o build do front-end
 frontend/                Vite + React + TypeScript + Tailwind
-scripts/
-  agendar_tarefa.ps1     registra a tarefa agendada no Windows
 ```
 
 ## Regras de negócio aplicadas na importação

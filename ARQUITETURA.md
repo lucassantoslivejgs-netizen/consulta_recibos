@@ -11,8 +11,8 @@ planilhas .xlsx (OneDrive)
         │  leitura (read-only)
         ▼
 backend/app/sync.py  ──►  backend/app/db.py  ──►  db/recibos.db (SQLite)
-   (run_sync.py,                                        │
-    agendado 1x/dia)                                     │  leitura via SQL
+   (run_sync.py OU                                       │
+    POST /api/sync)                                      │  leitura via SQL
                                                            ▼
                                             backend/app/main.py (FastAPI)
                                                            │  JSON sobre HTTP
@@ -22,16 +22,21 @@ backend/app/sync.py  ──►  backend/app/db.py  ──►  db/recibos.db (SQL
                                             próprio FastAPI em produção
 ```
 
-Duas trilhas de execução independentes:
+`sync.executar()` é chamado de dois jeitos possíveis, sem automação hoje:
 
-1. **Sincronização** (`run_sync.py` → `sync.executar()`): processo batch,
-   roda 1x/dia via Agendador de Tarefas do Windows. Só escreve no SQLite.
-2. **API + tela** (`uvicorn backend.app.main:app`): processo web de vida
-   longa. Só lê `recibos` e lê/escreve `anotacoes` (ver seção
-   [Observações do usuário](#observações-do-usuário)).
+1. **`run_sync.py`** — linha de comando, processo à parte. Não há nenhum
+   agendamento ativo no momento (removido deliberadamente — ver seção
+   [Sincronização manual pela tela](#sincronização-manual-pela-tela-apisync)
+   —, mas o script continua funcional caso um dia valha reativar).
+2. **`POST /api/sync`** — disparado pelo botão "Atualizar dados" da tela,
+   dentro do próprio processo `uvicorn` (via `BackgroundTasks`). É o
+   caminho normal de uso hoje.
 
-Os dois nunca escrevem na mesma tabela ao mesmo tempo, então não há lock
-manual entre eles — só a atomicidade que o SQLite já dá por transação.
+Como uma sincronização agora pode nascer *dentro* do processo web (não só
+como processo batch externo), existe um lock (`threading.Lock` em
+`main.py`) protegendo contra duas sincronizações simultâneas — ver detalhes
+na seção abaixo. Isso não existia quando a única forma de sincronizar era
+via `run_sync.py` isolado.
 
 ## Pipeline de sincronização (`backend/app/sync.py`)
 
@@ -131,9 +136,10 @@ tela na mesma porta. Em dev, o front roda separado via Vite (porta 5173) e
 
 ## Sincronização manual pela tela (`/api/sync`)
 
-Botão "Atualizar dados" no rodapé, pra não depender só do Agendador de
-Tarefas rodando 1x/dia — chama o mesmo `sync.executar()` que o `run_sync.py`
-usa, só que disparado por HTTP.
+Botão "Atualizar dados" no rodapé — é o caminho normal de sincronização hoje
+(não há agendamento automático ativo, ver [Visão geral](#visão-geral)).
+Chama o mesmo `sync.executar()` que o `run_sync.py` usa, só que disparado
+por HTTP.
 
 Pontos que não são óbvios:
 
@@ -154,11 +160,20 @@ Pontos que não são óbvios:
   rodar com `--workers > 1` (múltiplos processos), cada worker teria seu
   próprio lock e a proteção furaria — hoje a app roda com um único worker,
   então não é um problema real, só um limite a lembrar se isso mudar.
+  **Segunda limitação, mais real**: esse lock só protege sincronizações
+  disparadas *pela tela*. Ele não sabe nada sobre uma execução manual de
+  `python run_sync.py` rodando ao mesmo tempo num terminal à parte — são
+  processos diferentes, sem lock compartilhado. Rodar `run_sync.py` e
+  clicar em "Atualizar dados" ao mesmo tempo não é seguro. Na prática isso
+  é raro (uso interno, poucas pessoas), mas se `run_sync.py` voltar a ser
+  usado de forma automatizada (agendamento), evitar rodá-lo perto do
+  horário em que alguém provavelmente clicaria o botão.
 - **Front faz polling em `/api/sync/status`** (`Footer.tsx`, a cada 2s)
   até `em_andamento` virar `false`. Ao montar, o `Footer` já consulta o
-  status uma vez — se outra pessoa (ou o Agendador) já tiver disparado uma
-  sincronização, o botão aparece "Sincronizando…" pra todo mundo que abrir a
-  tela nesse meio-tempo, não só pra quem clicou.
+  status uma vez — se outra pessoa já tiver disparado uma sincronização
+  pela tela, o botão aparece "Sincronizando…" pra todo mundo que abrir a
+  tela nesse meio-tempo, não só
+  pra quem clicou.
 - Quando a sincronização termina sem erro, o front chama `buscarMeta()` de
   novo (atualiza o rodapé) e reexecuta a busca atual via um contador
   (`gatilhoRecarga` em `App.tsx`) incluído nas dependências do `useEffect`
